@@ -1,0 +1,14 @@
+# .gitignore
+
+# Node.js
+/node_modules
+.DS_Store
+
+# Environment Variables
+.env
+
+# Local Database Files
+database.json
+
+# Log files
+*.log
