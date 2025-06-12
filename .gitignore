@@ -12,3 +12,7 @@ database.json
 
 # Log files
 *.log
+
+# SQLite database files
+*.db
+*.db-journal

@@ -1,5 +1,6 @@
 /*
-server.js – Configures the Plaid client and uses Express to defines routes that call Plaid endpoints in the Sandbox environment.Utilizes the official Plaid node.js client library to make calls to the Plaid API.
+server.js – Configures the Plaid client and uses Express to defines routes that call Plaid endpoints in the Sandbox environment.
+Utilizes the official Plaid node.js client library and a local SQLite database.
 */
 
 // --- 1. Imports and Initial Setup ---
@@ -8,7 +9,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const { Configuration, PlaidApi, PlaidEnvironments } = require("plaid");
-const fs = require("fs").promises;
+const db = require("./database"); // <-- ⭐️ FIXED: Import the database connection
 
 const app = express();
 
@@ -17,7 +18,7 @@ app.use(session({ secret: "bosco", saveUninitialized: true, resave: true }));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// --- 3. Plaid Client and DB Configuration ---
+// --- 3. Plaid Client Configuration ---
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV],
   baseOptions: {
@@ -29,129 +30,107 @@ const config = new Configuration({
   },
 });
 const client = new PlaidApi(config);
-const DB_PATH = "./database.json";
 
-// --- 4. Database Helper Functions ---
-async function readDB() {
-  try {
-    const data = await fs.readFile(DB_PATH, "utf8");
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return {};
-    }
-    throw error;
-  }
-}
-
-async function writeDB(data) {
-  await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), "utf8");
-}
-
-// --- 5. API Routes ---
+// --- 4. API Routes ---
 
 // Creates a Link token and returns it
 app.get("/api/create_link_token", async (req, res, next) => {
   const tokenResponse = await client.linkTokenCreate({
     user: { client_user_id: req.sessionID },
-    client_name: "Plaid Persistent Quickstart",
+    client_name: "Plaid Quickstart",
     language: "en",
-    products: ["auth", "transactions"],
+    products: ["transactions"],
     country_codes: ["US"],
   });
   res.json(tokenResponse.data);
 });
 
-// Exchanges the public token from Plaid Link for an access token
+// Exchanges the public token, gets the initial transactions, and stores everything in SQLite.
 app.post("/api/exchange_public_token", async (req, res, next) => {
-  const exchangeResponse = await client.itemPublicTokenExchange({
-    public_token: req.body.public_token,
-  });
+  try {
+    const exchangeResponse = await client.itemPublicTokenExchange({
+      public_token: req.body.public_token,
+    });
 
-  const itemId = exchangeResponse.data.item_id;
-  const accessToken = exchangeResponse.data.access_token;
+    const itemId = exchangeResponse.data.item_id;
+    const accessToken = exchangeResponse.data.access_token;
 
-  const db = await readDB();
-  db[itemId] = accessToken;
-  await writeDB(db);
+    // Initial Transaction Sync
+    let cursor = null;
+    let added = [];
+    while (true) {
+      const request = { access_token: accessToken, cursor: cursor };
+      const response = await client.transactionsSync(request);
+      const data = response.data;
+      added = added.concat(data.added);
+      if (!data.has_more) {
+        cursor = data.next_cursor;
+        break;
+      }
+      cursor = data.next_cursor;
+    }
 
-  console.log(`Stored access_token for item_id: ${itemId} in ${DB_PATH}`);
-  res.json({ item_id: itemId });
+    // Database Operations
+    const dbTransaction = db.transaction(() => {
+      const insertItem = db.prepare("INSERT INTO items (id, access_token, next_cursor) VALUES (?, ?, ?)");
+      insertItem.run(itemId, accessToken, cursor);
+
+      const insertTransaction = db.prepare("INSERT INTO transactions (id, item_id, account_id, name, amount, date) VALUES (?, ?, ?, ?, ?, ?)");
+      for (const txn of added) {
+        insertTransaction.run(txn.transaction_id, itemId, txn.account_id, txn.name, txn.amount, txn.date);
+      }
+    });
+    dbTransaction();
+
+    console.log(`Initial sync complete! Stored ${added.length} transactions.`);
+    res.json({ item_id: itemId });
+  } catch (error) {
+    console.error("Error exchanging public token:", error);
+    res.status(500).json({ error: "Failed to exchange token and sync transactions." });
+  }
 });
 
-// Fetches balance data using the Node client library for Plaid
+// Fetches balance data by calling Plaid directly (since balance is not stored permanently yet)
 app.post("/api/balance", async (req, res, next) => {
   const { item_id } = req.body;
-  const db = await readDB();
-  const access_token = db[item_id];
 
-  if (!access_token) {
+  // ⭐️ FIXED: Query the database for the access_token
+  const getItem = db.prepare("SELECT access_token FROM items WHERE id = ?");
+  const item = getItem.get(item_id);
+
+  if (!item || !item.access_token) {
     return res.status(400).json({ error: "No access token found for this item." });
   }
 
   try {
-    const balanceResponse = await client.accountsBalanceGet({ access_token });
-    res.json({
-      Balance: balanceResponse.data,
-    });
+    const balanceResponse = await client.accountsBalanceGet({ access_token: item.access_token });
+    res.json({ Balance: balanceResponse.data });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Could not fetch balance." });
   }
 });
 
-app.post("/api/transactions", async (req, res, next) => {
+// Fetches all transactions for a given item FROM OUR DATABASE
+app.post("/api/get_transactions", (req, res, next) => {
+  // This route was already correct, it just needed the db import to work.
   const { item_id } = req.body;
-  const db = await readDB();
-  const access_token = db[item_id];
-
-  if (!access_token) {
-    return res.status(400).json({ error: "No access token found for this item." });
-  }
-
-  // Set cursor to empty to receive all pages of data
-  let cursor = null;
-
-  // New transaction data since the last sync
-  let added = [];
-  let modified = [];
-  // Removed transaction ids
-  let removed = [];
-  let hasMore = true;
-
   try {
-    // Iterate through each page of new transaction updates for item
-    // Note: This is an advanced pattern for iterating through pages of data.
-    // For a simpler start, you could just fetch the first page.
-    // But this complete example is more robust.
-    while (hasMore) {
-      const request = {
-        access_token: access_token,
-        cursor: cursor,
-      };
-      const response = await client.transactionsSync(request);
-      const data = response.data;
-
-      // Add this page of results to our transaction list
-      added = added.concat(data.added);
-      modified = modified.concat(data.modified);
-      removed = removed.concat(data.removed);
-      hasMore = data.has_more;
-
-      // Update the cursor to the next cursor
-      cursor = data.next_cursor;
-    }
-
-    // For simplicity, we'll just return the added transactions.
-    // A real app would need to handle modified and removed transactions.
-    res.json({ transactions: added });
+    const getTransactions = db.prepare("SELECT * FROM transactions WHERE item_id = ? ORDER BY date DESC");
+    const transactions = getTransactions.all(item_id);
+    res.json({ transactions });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Could not fetch transactions." });
+    console.error("Failed to get transactions from DB:", error);
+    res.status(500).json({ error: "Failed to retrieve transactions." });
   }
 });
 
-// --- 6. Start The Server ---
+// ⭐️ REMOVED: The old `/api/transactions` endpoint is now redundant.
+// The initial sync happens in `/exchange_public_token`.
+// Future updates would happen in a new `/api/sync-transactions` endpoint.
+// We've replaced its purpose with the simpler `/api/get_transactions` for now.
+
+// --- 5. Start The Server ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server is running and listening on port ${PORT}`);
