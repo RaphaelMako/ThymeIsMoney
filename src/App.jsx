@@ -21,13 +21,25 @@ function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ public_token: publicToken }),
     });
-    const { item_id } = await response.json();
-    localStorage.setItem("item_id", item_id);
-    setItemId(item_id);
 
-    await getBalance(item_id);
-    await getTransactions(item_id); // MODIFIED: Also fetch transactions on success
-  }, []);
+    // --- NEW: EXPECT ALL DATA AT ONCE ---
+    const data = await response.json();
+
+    // Check for an error from the server first
+    if (data.error) {
+      setError(data.error);
+      setLoading(false);
+      return;
+    }
+
+    // Set everything from the single response
+    localStorage.setItem("item_id", data.item_id);
+    setItemId(data.item_id);
+    setBalance({ Balance: data.balance }); // Keep the structure consistent with your old getBalance
+    setTransactions(data.transactions);
+
+    setLoading(false); // We are done!
+  }, []); // No dependencies needed here
 
   const createLinkToken = useCallback(async () => {
     const response = await fetch("/api/create_link_token", {});
@@ -36,14 +48,14 @@ function App() {
   }, []);
 
   const getBalance = useCallback(async (id) => {
+    console.log(`[FRONT-END] Requesting balance for item_id: '${id}'`);
     const response = await fetch("/api/balance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ item_id: id }),
     });
     const balance = await response.json();
-    console.log("test test test");
-    console.log(balance);
+    console.log("[FRONT-END] Received balance data:", balance);
     setBalance(balance);
   }, []);
 
@@ -129,18 +141,26 @@ function App() {
 
         {/* NEW: Display Transaction Data */}
         <h3>Transactions</h3>
-        {transactions != null ? (
-          <ul>
-            {transactions.map((t) => (
-              <li key={t.transaction_id} style={{ borderBottom: "1px solid #ccc", padding: "10px 0" }}>
-                <strong>{t.name}</strong> <br />
-                Amount: ${t.amount.toFixed(2)} {/* Added .toFixed(2) for better currency display */} <br />
-                Date: {t.date} <br />
-                Category: {formatCategory(t.categories)} {/* MODIFIED: Use the helper and check correct field name */}
-              </li>
-            ))}
-          </ul>
+        <h3>Transactions</h3>
+        {/* --- MODIFIED RENDER LOGIC --- */}
+        {transactions ? (
+          transactions.length > 0 ? (
+            <ul>
+              {transactions.map((t) => (
+                <li key={t.id} /* Use transaction's primary key from DB */ style={{ borderBottom: "1px solid #ccc", padding: "10px 0" }}>
+                  <strong>{t.name}</strong> <br />
+                  Amount: ${t.amount.toFixed(2)} <br />
+                  Date: {t.date} <br />
+                  Category: {formatCategory(t.categories)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            // This now handles the case where the API returns an empty array
+            <p>No transactions found for this account yet.</p>
+          )
         ) : (
+          // This handles the initial state where transactions are still null (i.e., loading)
           <p>Loading transactions...</p>
         )}
       </div>

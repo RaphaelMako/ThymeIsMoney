@@ -1,24 +1,17 @@
-/*
-server.js – Configures the Plaid client and uses Express to defines routes that call Plaid endpoints in the Sandbox environment.
-Utilizes the official Plaid node.js client library and a local SQLite database.
-*/
+// server.js (DEBUG VERSION)
 
-// --- 1. Imports and Initial Setup ---
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const { Configuration, PlaidApi, PlaidEnvironments } = require("plaid");
-const db = require("./database"); // <-- ⭐️ FIXED: Import the database connection
+const db = require("./database");
 
 const app = express();
-
-// --- 2. Middleware Configuration ---
 app.use(session({ secret: "bosco", saveUninitialized: true, resave: true }));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// --- 3. Plaid Client Configuration ---
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV],
   baseOptions: {
@@ -31,102 +24,129 @@ const config = new Configuration({
 });
 const client = new PlaidApi(config);
 
-// --- 4. API Routes ---
-
-// Creates a Link token and returns it
 app.get("/api/create_link_token", async (req, res, next) => {
-  const tokenResponse = await client.linkTokenCreate({
-    user: { client_user_id: req.sessionID },
-    client_name: "Plaid Quickstart",
-    language: "en",
-    products: ["transactions"],
-    country_codes: ["US"],
-  });
-  res.json(tokenResponse.data);
+  try {
+    console.log("\n[SERVER] /api/create_link_token: Received request.");
+    const tokenResponse = await client.linkTokenCreate({
+      user: { client_user_id: req.sessionID },
+      client_name: "Plaid Quickstart",
+      language: "en",
+      products: ["transactions"],
+      country_codes: ["US"],
+    });
+    console.log("[SERVER] /api/create_link_token: Successfully created link token.");
+    res.json(tokenResponse.data);
+  } catch (error) {
+    console.error("[SERVER] /api/create_link_token: FAILED.", error.response ? error.response.data : error);
+    res.status(500).json({ error: "Failed to create link token." });
+  }
 });
 
-// Exchanges the public token, gets the initial transactions, and stores everything in SQLite.
 app.post("/api/exchange_public_token", async (req, res, next) => {
   try {
-    const exchangeResponse = await client.itemPublicTokenExchange({
-      public_token: req.body.public_token,
-    });
+    const public_token = req.body.public_token;
+    const exchangeResponse = await client.itemPublicTokenExchange({ public_token });
 
     const itemId = exchangeResponse.data.item_id;
     const accessToken = exchangeResponse.data.access_token;
 
-    // Initial Transaction Sync
+    // --- SYNC TRANSACTIONS ---
     let cursor = null;
     let added = [];
-    while (true) {
+    let hasMore = true;
+    while (hasMore) {
       const request = { access_token: accessToken, cursor: cursor };
       const response = await client.transactionsSync(request);
       const data = response.data;
       added = added.concat(data.added);
-      if (!data.has_more) {
-        cursor = data.next_cursor;
-        break;
-      }
+      hasMore = data.has_more;
       cursor = data.next_cursor;
     }
 
-    // Database Operations
+    // --- DATABASE WRITE ---
     const dbTransaction = db.transaction(() => {
-      const insertItem = db.prepare("INSERT INTO items (id, access_token, next_cursor) VALUES (?, ?, ?)");
-      insertItem.run(itemId, accessToken, cursor);
-
-      const insertTransaction = db.prepare("INSERT INTO transactions (id, item_id, account_id, name, amount, date, categories) VALUES (?, ?, ?, ?, ?, ?, ?)");
-      for (const txn of added) {
-        const categories = txn.category ? JSON.stringify(txn.category) : null;
-        insertTransaction.run(txn.transaction_id, itemId, txn.account_id, txn.name, txn.amount, txn.date, categories);
+      // ... (your existing database write logic is fine)
+      const upsertItem = db.prepare("REPLACE INTO items (id, access_token, next_cursor) VALUES (?, ?, ?)");
+      upsertItem.run(itemId, accessToken, cursor);
+      if (added.length > 0) {
+        const insertTransaction = db.prepare("INSERT OR IGNORE INTO transactions (id, item_id, account_id, name, amount, date, categories) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        for (const txn of added) {
+          const categories = txn.category ? JSON.stringify(txn.category) : null;
+          insertTransaction.run(txn.transaction_id, itemId, txn.account_id, txn.name, txn.amount, txn.date, categories);
+        }
       }
     });
     dbTransaction();
 
-    console.log(`Initial sync complete! Stored ${added.length} transactions.`);
-    res.json({ item_id: itemId });
+    // --- NEW: FETCH INITIAL DATA ON THE SERVER ---
+    // Fetch the balance
+    const balanceResponse = await client.accountsBalanceGet({ access_token: accessToken });
+    const balance = balanceResponse.data;
+
+    // Read the transactions we just saved
+    const getTransactions = db.prepare("SELECT * FROM transactions WHERE item_id = ? ORDER BY date DESC");
+    const transactions = getTransactions.all(itemId);
+
+    console.log(`[SERVER] /exchange: Returning item_id, ${transactions.length} transactions, and balance.`);
+
+    // --- NEW: SEND EVERYTHING BACK IN ONE RESPONSE ---
+    res.json({
+      item_id: itemId,
+      balance: balance,
+      transactions: transactions,
+    });
   } catch (error) {
-    console.error("Error exchanging public token:", error);
-    res.status(500).json({ error: "Failed to exchange token and sync transactions." });
+    console.error("[SERVER] /exchange_public_token: FAILED.", error.response ? error.response.data : error);
+    res.status(500).json({ error: "A server error occurred during token exchange." });
   }
 });
 
-// Fetches balance data by calling Plaid directly (since balance is not stored permanently yet)
 app.post("/api/balance", async (req, res, next) => {
+  console.log("\n[SERVER] /api/balance: Received request.");
   const { item_id } = req.body;
+  console.log("[SERVER] /api/balance: Requesting balance for item_id:", item_id);
 
-  // ⭐️ FIXED: Query the database for the access_token
+  if (!item_id) {
+    console.error("[SERVER] /api/balance: FAILED - No item_id was provided in the request body.");
+    return res.status(400).json({ error: "item_id is missing from request." });
+  }
+
   const getItem = db.prepare("SELECT access_token FROM items WHERE id = ?");
   const item = getItem.get(item_id);
 
+  console.log("[SERVER] /api/balance: Result from database query for item:", item);
+
   if (!item || !item.access_token) {
+    console.error("[SERVER] /api/balance: FAILED - item_id not found in 'items' table.");
     return res.status(400).json({ error: "No access token found for this item." });
   }
 
   try {
     const balanceResponse = await client.accountsBalanceGet({ access_token: item.access_token });
+    console.log("[SERVER] /api/balance: Successfully fetched balance from Plaid.");
     res.json({ Balance: balanceResponse.data });
   } catch (error) {
-    console.error(error);
+    console.error("[SERVER] /api/balance: FAILED.", error.response ? error.response.data : error);
     res.status(500).json({ error: "Could not fetch balance." });
   }
 });
 
-// Fetches all transactions for a given item FROM OUR DATABASE
 app.post("/api/get_transactions", (req, res, next) => {
-  // This route was already correct, it just needed the db import to work.
+  console.log("\n[SERVER] /api/get_transactions: Received request.");
   const { item_id } = req.body;
+  console.log("[SERVER] /api/get_transactions: Requesting transactions for item_id:", item_id);
+
   try {
     const getTransactions = db.prepare("SELECT * FROM transactions WHERE item_id = ? ORDER BY date DESC");
     const transactions = getTransactions.all(item_id);
+    console.log(`[SERVER] /api/get_transactions: Found ${transactions.length} transactions in database.`);
     res.json({ transactions });
   } catch (error) {
-    console.error("Failed to get transactions from DB:", error);
+    console.error("[SERVER] /api/get_transactions: FAILED.", error);
     res.status(500).json({ error: "Failed to retrieve transactions." });
   }
 });
 
-// --- 5. Start The Server ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server is running and listening on port ${PORT}`);
