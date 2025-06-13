@@ -9,7 +9,8 @@ function App() {
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [itemId, setItemId] = useState(null);
-  const [transactions, setTransactions] = useState(null); // NEW: State for transactions
+  const [transactions, setTransactions] = useState(null);
+  const [error, setError] = useState(null);
 
   // --- Callback Functions ---
 
@@ -46,15 +47,41 @@ function App() {
     setBalance(balance);
   }, []);
 
-  // NEW: Function to fetch transactions
+  const formatCategory = (categoryString) => {
+    if (!categoryString) {
+      return "Uncategorized";
+    }
+    try {
+      // Plaid returns categories as an array of strings.
+      const categories = JSON.parse(categoryString);
+      return categories.join(" > ");
+    } catch (error) {
+      // If parsing fails for any reason, fall back gracefully.
+      console.error("Failed to parse category:", categoryString, error);
+      return "Uncategorized";
+    }
+  };
+
   const getTransactions = useCallback(async (id) => {
-    const response = await fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item_id: id }),
-    });
-    const data = await response.json();
-    setTransactions(data.transactions);
+    setError(null); // Clear previous errors
+    try {
+      const response = await fetch("/api/get_transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: id }),
+      });
+
+      if (!response.ok) {
+        // Handle HTTP errors like 404 or 500
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setTransactions(data.transactions);
+    } catch (e) {
+      console.error("Failed to fetch transactions:", e);
+      setError("Could not load your transactions. Please try again later.");
+    }
   }, []);
 
   const { open, ready } = usePlaidLink({ token, onSuccess });
@@ -83,6 +110,10 @@ function App() {
     return <div className="spinner" />;
   }
 
+  if (error) {
+    return <div className="error-message">{error}</div>;
+  }
+
   // If we have an item_id, we are "logged in"
   if (itemId) {
     return (
@@ -103,8 +134,9 @@ function App() {
             {transactions.map((t) => (
               <li key={t.transaction_id} style={{ borderBottom: "1px solid #ccc", padding: "10px 0" }}>
                 <strong>{t.name}</strong> <br />
-                Amount: ${t.amount} <br />
-                Date: {t.date}
+                Amount: ${t.amount.toFixed(2)} {/* Added .toFixed(2) for better currency display */} <br />
+                Date: {t.date} <br />
+                Category: {formatCategory(t.categories)} {/* MODIFIED: Use the helper and check correct field name */}
               </li>
             ))}
           </ul>

@@ -75,9 +75,10 @@ app.post("/api/exchange_public_token", async (req, res, next) => {
       const insertItem = db.prepare("INSERT INTO items (id, access_token, next_cursor) VALUES (?, ?, ?)");
       insertItem.run(itemId, accessToken, cursor);
 
-      const insertTransaction = db.prepare("INSERT INTO transactions (id, item_id, account_id, name, amount, date) VALUES (?, ?, ?, ?, ?, ?)");
+      const insertTransaction = db.prepare("INSERT INTO transactions (id, item_id, account_id, name, amount, date, categories) VALUES (?, ?, ?, ?, ?, ?, ?)");
       for (const txn of added) {
-        insertTransaction.run(txn.transaction_id, itemId, txn.account_id, txn.name, txn.amount, txn.date);
+        const categories = txn.category ? JSON.stringify(txn.category) : null;
+        insertTransaction.run(txn.transaction_id, itemId, txn.account_id, txn.name, txn.amount, txn.date, categories);
       }
     });
     dbTransaction();
@@ -124,11 +125,6 @@ app.post("/api/get_transactions", (req, res, next) => {
     res.status(500).json({ error: "Failed to retrieve transactions." });
   }
 });
-
-// ⭐️ REMOVED: The old `/api/transactions` endpoint is now redundant.
-// The initial sync happens in `/exchange_public_token`.
-// Future updates would happen in a new `/api/sync-transactions` endpoint.
-// We've replaced its purpose with the simpler `/api/get_transactions` for now.
 
 // --- 5. Start The Server ---
 const PORT = process.env.PORT || 8080;

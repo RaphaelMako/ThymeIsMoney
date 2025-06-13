@@ -22,7 +22,7 @@ function initializeDatabase() {
       name TEXT NOT NULL,
       amount REAL NOT NULL,
       date TEXT NOT NULL,
-      category TEXT,
+      categories TEXT,
       FOREIGN KEY (item_id) REFERENCES items (id)
     );
   `;
