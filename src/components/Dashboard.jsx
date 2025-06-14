@@ -20,7 +20,8 @@ function Dashboard({ balance, transactions }) {
 
   return (
     <div>
-      <h2>Dashboard</h2>
+      <h1>Hello Mako</h1>
+      <h2>{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(totalBalance)}</h2>
 
       <div className="summary-card">
         <h3>Total Balance</h3>

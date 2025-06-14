@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import "./App.scss";
+import Dashboard from "./components/Dashboard";
 
 function App() {
   const [token, setToken] = useState(null);
@@ -128,43 +129,8 @@ function App() {
 
   // If we have an item_id, we are "logged in"
   if (itemId) {
-    return (
-      <div>
-        <h2>Your Account</h2>
-
-        {/* Display Balance Data */}
-        {balance != null && (
-          <pre>
-            <code>{JSON.stringify(balance.Balance, null, 2)}</code>
-          </pre>
-        )}
-
-        {/* NEW: Display Transaction Data */}
-        <h3>Transactions</h3>
-        <h3>Transactions</h3>
-        {/* --- MODIFIED RENDER LOGIC --- */}
-        {transactions ? (
-          transactions.length > 0 ? (
-            <ul>
-              {transactions.map((t) => (
-                <li key={t.id} /* Use transaction's primary key from DB */ style={{ borderBottom: "1px solid #ccc", padding: "10px 0" }}>
-                  <strong>{t.name}</strong> <br />
-                  Amount: ${t.amount.toFixed(2)} <br />
-                  Date: {t.date} <br />
-                  Category: {formatCategory(t.categories)}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            // This now handles the case where the API returns an empty array
-            <p>No transactions found for this account yet.</p>
-          )
-        ) : (
-          // This handles the initial state where transactions are still null (i.e., loading)
-          <p>Loading transactions...</p>
-        )}
-      </div>
-    );
+    // RENDER THE DASHBOARD and pass it the data it needs
+    return <Dashboard balance={balance} transactions={transactions} />;
   }
 
   // Default "logged out" view
