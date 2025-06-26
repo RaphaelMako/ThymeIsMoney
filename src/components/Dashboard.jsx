@@ -20,15 +20,13 @@ function Dashboard({ balance, transactions }) {
 
   return (
     <div>
-      <h1>Hello Mako</h1>
-      <h2>{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(totalBalance)}</h2>
-
-      <div className="summary-card">
-        <h3>Total Balance</h3>
-        <p style={{ fontSize: "2em", color: "#4CAF50" }}>{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(totalBalance)}</p>
-      </div>
-
       <div className="chart-card">
+        <h1>Hello Mako</h1>
+        <div className="summary-card">
+          <h3>Total Balance</h3>
+          <h2 style={{ fontSize: "2em", color: "#4CAF50" }}>{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(totalBalance)}</h2>
+        </div>
+
         <h3>Balance Over Last 30 Days</h3>
         <BalanceOverTimeChart data={chartData} />
       </div>
