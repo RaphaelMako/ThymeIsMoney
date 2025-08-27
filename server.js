@@ -1,5 +1,3 @@
-// server.js (DEBUG VERSION)
-
 require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -24,9 +22,8 @@ const config = new Configuration({
 });
 const client = new PlaidApi(config);
 
-app.get("/api/create_link_token", async (req, res, next) => {
+app.post("/api/create_link_token", async (req, res) => {
   try {
-    console.log("\n[SERVER] /api/create_link_token: Received request.");
     const tokenResponse = await client.linkTokenCreate({
       user: { client_user_id: req.sessionID },
       client_name: "Plaid Quickstart",
@@ -34,120 +31,77 @@ app.get("/api/create_link_token", async (req, res, next) => {
       products: ["transactions"],
       country_codes: ["US"],
     });
-    console.log("[SERVER] /api/create_link_token: Successfully created link token.");
     res.json(tokenResponse.data);
   } catch (error) {
-    console.error("[SERVER] /api/create_link_token: FAILED.", error.response ? error.response.data : error);
+    console.error("Error creating link token:", error);
     res.status(500).json({ error: "Failed to create link token." });
   }
 });
 
-app.post("/api/exchange_public_token", async (req, res, next) => {
+app.post("/api/exchange_public_token", async (req, res) => {
   try {
-    const public_token = req.body.public_token;
+    const { public_token } = req.body;
     const exchangeResponse = await client.itemPublicTokenExchange({ public_token });
 
     const itemId = exchangeResponse.data.item_id;
     const accessToken = exchangeResponse.data.access_token;
 
-    // --- SYNC TRANSACTIONS ---
+    const upsertItem = db.prepare("REPLACE INTO items (id, access_token) VALUES (?, ?)");
+    upsertItem.run(itemId, accessToken);
+
+    res.json({ item_id: itemId });
+  } catch (error) {
+    console.error("Error exchanging public token:", error);
+    res.status(500).json({ error: "A server error occurred." });
+  }
+});
+
+app.post("/api/transactions", async (req, res) => {
+  try {
+    const { item_id } = req.body;
+    const itemQuery = db.prepare("SELECT access_token FROM items WHERE id = ?");
+    const item = itemQuery.get(item_id);
+
+    if (!item) {
+      return res.status(404).json({ error: "Item not found." });
+    }
+
     let cursor = null;
     let added = [];
     let hasMore = true;
+
     while (hasMore) {
-      const request = { access_token: accessToken, cursor: cursor };
+      const request = {
+        access_token: item.access_token,
+        cursor: cursor,
+      };
       const response = await client.transactionsSync(request);
       const data = response.data;
+
       added = added.concat(data.added);
       hasMore = data.has_more;
       cursor = data.next_cursor;
     }
 
-    // --- DATABASE WRITE ---
+    const insertTransaction = db.prepare("INSERT OR IGNORE INTO transactions (id, item_id, account_id, name, amount, date) VALUES (?, ?, ?, ?, ?, ?)");
     const dbTransaction = db.transaction(() => {
-      // ... (your existing database write logic is fine)
-      const upsertItem = db.prepare("REPLACE INTO items (id, access_token, next_cursor) VALUES (?, ?, ?)");
-      upsertItem.run(itemId, accessToken, cursor);
-      if (added.length > 0) {
-        const insertTransaction = db.prepare("INSERT OR IGNORE INTO transactions (id, item_id, account_id, name, amount, date, categories) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        for (const txn of added) {
-          const categories = txn.category ? JSON.stringify(txn.category) : null;
-          insertTransaction.run(txn.transaction_id, itemId, txn.account_id, txn.name, txn.amount, txn.date, categories);
-        }
+      for (const txn of added) {
+        insertTransaction.run(txn.transaction_id, item_id, txn.account_id, txn.name, txn.amount, txn.date);
       }
     });
     dbTransaction();
 
-    // --- NEW: FETCH INITIAL DATA ON THE SERVER ---
-    // Fetch the balance
-    const balanceResponse = await client.accountsBalanceGet({ access_token: accessToken });
-    const balance = balanceResponse.data;
-
-    // Read the transactions we just saved
-    const getTransactions = db.prepare("SELECT * FROM transactions WHERE item_id = ? ORDER BY date DESC");
-    const transactions = getTransactions.all(itemId);
-
-    console.log(`[SERVER] /exchange: Returning item_id, ${transactions.length} transactions, and balance.`);
-
-    // --- NEW: SEND EVERYTHING BACK IN ONE RESPONSE ---
-    res.json({
-      item_id: itemId,
-      balance: balance,
-      transactions: transactions,
-    });
-  } catch (error) {
-    console.error("[SERVER] /exchange_public_token: FAILED.", error.response ? error.response.data : error);
-    res.status(500).json({ error: "A server error occurred during token exchange." });
-  }
-});
-
-app.post("/api/balance", async (req, res, next) => {
-  console.log("\n[SERVER] /api/balance: Received request.");
-  const { item_id } = req.body;
-  console.log("[SERVER] /api/balance: Requesting balance for item_id:", item_id);
-
-  if (!item_id) {
-    console.error("[SERVER] /api/balance: FAILED - No item_id was provided in the request body.");
-    return res.status(400).json({ error: "item_id is missing from request." });
-  }
-
-  const getItem = db.prepare("SELECT access_token FROM items WHERE id = ?");
-  const item = getItem.get(item_id);
-
-  console.log("[SERVER] /api/balance: Result from database query for item:", item);
-
-  if (!item || !item.access_token) {
-    console.error("[SERVER] /api/balance: FAILED - item_id not found in 'items' table.");
-    return res.status(400).json({ error: "No access token found for this item." });
-  }
-
-  try {
-    const balanceResponse = await client.accountsBalanceGet({ access_token: item.access_token });
-    console.log("[SERVER] /api/balance: Successfully fetched balance from Plaid.");
-    res.json({ Balance: balanceResponse.data });
-  } catch (error) {
-    console.error("[SERVER] /api/balance: FAILED.", error.response ? error.response.data : error);
-    res.status(500).json({ error: "Could not fetch balance." });
-  }
-});
-
-app.post("/api/get_transactions", (req, res, next) => {
-  console.log("\n[SERVER] /api/get_transactions: Received request.");
-  const { item_id } = req.body;
-  console.log("[SERVER] /api/get_transactions: Requesting transactions for item_id:", item_id);
-
-  try {
     const getTransactions = db.prepare("SELECT * FROM transactions WHERE item_id = ? ORDER BY date DESC");
     const transactions = getTransactions.all(item_id);
-    console.log(`[SERVER] /api/get_transactions: Found ${transactions.length} transactions in database.`);
+
     res.json({ transactions });
   } catch (error) {
-    console.error("[SERVER] /api/get_transactions: FAILED.", error);
-    res.status(500).json({ error: "Failed to retrieve transactions." });
+    console.error("Error fetching transactions:", error);
+    res.status(500).json({ error: "Failed to fetch transactions." });
   }
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`Server is running and listening on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
