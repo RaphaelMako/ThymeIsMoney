@@ -40,7 +40,7 @@ export default function PlaidLinkButton() {
     <button
       onClick={() => open()}
       disabled={!ready || busy}
-      className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+      className="rounded-lg bg-thyme-800 px-4 py-2 text-sm font-medium text-white hover:bg-thyme-700 disabled:opacity-50"
     >
       {busy ? "Linking…" : "Link a bank account"}
     </button>

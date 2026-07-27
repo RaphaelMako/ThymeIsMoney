@@ -10,7 +10,7 @@ export type BudgetGroupSummary = {
 };
 
 const COLORS: Record<BudgetGroupSummary["group"], string> = {
-  NEEDS: "#366b7d",
+  NEEDS: "#396e77",
   WANTS: "#5c7f46",
   SAVINGS: "#7c3f4e",
 };

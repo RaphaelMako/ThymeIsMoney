@@ -140,7 +140,7 @@ export default async function Home() {
           }}
           className="absolute right-6 top-6"
         >
-          <button className="rounded-lg border border-teal-400 px-3 py-1.5 text-xs text-teal-100 hover:bg-teal-800">
+          <button className="rounded-lg border border-thyme-400 px-3 py-1.5 text-xs text-thyme-100 hover:bg-thyme-800">
             Sign out
           </button>
         </form>
@@ -153,7 +153,7 @@ export default async function Home() {
         </div>
 
         <section>
-          <h2 className="mb-3 text-2xl font-bold text-teal-900">Recent Expenses</h2>
+          <h2 className="mb-3 text-2xl font-bold text-thyme-900">Recent Expenses</h2>
           {recent.length === 0 ? (
             <p className="text-sm text-zinc-500">
               {hasLinkedBank
@@ -242,7 +242,7 @@ export default async function Home() {
 
         {hasLinkedBank && (
           <section>
-            <h2 className="mb-3 text-2xl font-bold text-teal-900">Budget</h2>
+            <h2 className="mb-3 text-2xl font-bold text-thyme-900">Budget</h2>
             {budgetGroups ? (
               <BudgetCard groups={budgetGroups} />
             ) : (
@@ -253,7 +253,7 @@ export default async function Home() {
 
         {hasLinkedBank && (
           <section>
-            <h2 className="mb-3 text-2xl font-bold text-teal-900">
+            <h2 className="mb-3 text-2xl font-bold text-thyme-900">
               This Month&apos;s Spending
             </h2>
             <SpendingTable rows={monthRows} />
@@ -262,7 +262,7 @@ export default async function Home() {
 
         {pastMonths.length > 0 && (
           <section>
-            <h2 className="mb-3 text-2xl font-bold text-teal-900">
+            <h2 className="mb-3 text-2xl font-bold text-thyme-900">
               Past Months&apos; Spending Summaries
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -270,7 +270,7 @@ export default async function Home() {
                 <Link
                   key={month}
                   href={`/month/${month}`}
-                  className="rounded-xl border border-zinc-200 bg-white px-4 py-4 text-center text-sm font-semibold text-teal-900 shadow-sm transition-colors hover:border-teal-700 hover:bg-teal-50"
+                  className="rounded-xl border border-zinc-200 bg-white px-4 py-4 text-center text-sm font-semibold text-thyme-900 shadow-sm transition-colors hover:border-thyme-700 hover:bg-thyme-50"
                 >
                   {monthLabel(month)}
                 </Link>
@@ -280,7 +280,7 @@ export default async function Home() {
         )}
 
         <section>
-          <h2 className="mb-3 text-2xl font-bold text-teal-900">Accounts</h2>
+          <h2 className="mb-3 text-2xl font-bold text-thyme-900">Accounts</h2>
           {bankAccounts.length === 0 ? (
             <p className="text-sm text-zinc-500">No accounts linked yet.</p>
           ) : (

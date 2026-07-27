@@ -70,7 +70,7 @@ export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
       {hiddenCount > 0 && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full py-3 text-base font-bold text-teal-800 hover:text-teal-600"
+          className="w-full py-3 text-base font-bold text-thyme-800 hover:text-thyme-600"
         >
           {expanded ? "Show less" : `Show ${hiddenCount} more`}
         </button>

@@ -96,7 +96,7 @@ function ChartTooltip({
   });
   return (
     <div className="rounded-lg bg-white/95 px-3 py-2 text-xs shadow-md">
-      <p className="font-semibold text-teal-900">{currency.format(point.balance)}</p>
+      <p className="font-semibold text-thyme-900">{currency.format(point.balance)}</p>
       <p className="text-zinc-500">{label}</p>
     </div>
   );
@@ -114,9 +114,19 @@ export default function BalanceHero({
   const [range, setRange] = useState<Range>("monthly");
   const series = useMemo(() => buildSeries(netWorth, transactions, range), [netWorth, transactions, range]);
 
+  // Pad the bottom of the y-domain so the line never touches the chart
+  // floor — the under-line gradient needs room to finish fading to white.
+  const [domainLo, domainHi] = useMemo(() => {
+    const values = series.map((p) => p.balance);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const pad = (max - min || Math.abs(min) || 1) * 0.15;
+    return [min - pad, max];
+  }, [series]);
+
   return (
     <section className="flex h-[90vh] min-h-[560px] flex-col">
-      <div className="flex min-h-0 flex-1 flex-col bg-teal-900">
+      <div className="flex min-h-0 flex-1 flex-col bg-thyme-900">
         <div className="mx-auto w-[85%] pt-14">
           <h1 className="text-inset text-4xl font-extrabold md:text-5xl">
             {greeting()} {name}
@@ -124,25 +134,24 @@ export default function BalanceHero({
           <p className="text-inset mt-4 text-7xl font-extrabold tracking-tight md:text-8xl">
             {currency.format(netWorth)}
           </p>
-          <p className="mt-2 text-base text-teal-200">Across all accounts.</p>
+          <p className="mt-2 text-base text-thyme-200">Across all accounts.</p>
         </div>
         <div className="min-h-0 w-full flex-1 pt-6">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={series} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ffffff" stopOpacity={0.16} />
-                  <stop offset="45%" stopColor="#eff5f4" stopOpacity={0.55} />
-                  <stop offset="100%" stopColor="#fafafa" stopOpacity={1} />
+                  <stop offset="0%" stopColor="#166767" />
+                  <stop offset="100%" stopColor="#ffffff" />
                 </linearGradient>
               </defs>
               <XAxis dataKey="date" hide />
-              <YAxis hide domain={["dataMin", "dataMax"]} />
+              <YAxis hide domain={[domainLo, domainHi]} />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#ffffff55" }} />
               <Area
                 type="monotone"
                 dataKey="balance"
-                baseValue="dataMin"
+                baseValue={domainLo}
                 stroke="#ffffff"
                 strokeWidth={2.5}
                 fill="url(#balanceGradient)"
@@ -153,15 +162,17 @@ export default function BalanceHero({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-4 py-6">
+      <div className="h-10 shrink-0 bg-gradient-to-b from-white to-[#fafafa]" />
+
+      <div className="flex flex-wrap items-center justify-center gap-4 pb-6">
         {RANGES.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setRange(key)}
             className={`rounded-full px-6 py-2 text-base font-bold text-white transition-colors ${
               range === key
-                ? "bg-teal-950 ring-2 ring-teal-950/30"
-                : "bg-teal-800 hover:bg-teal-700"
+                ? "bg-thyme-950 ring-2 ring-thyme-950/30"
+                : "bg-thyme-800 hover:bg-thyme-700"
             }`}
           >
             {label}

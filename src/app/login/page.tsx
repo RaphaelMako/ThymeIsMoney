@@ -45,7 +45,7 @@ export default function LoginPage() {
   return (
     <div className="flex flex-1 items-center justify-center bg-zinc-50 p-6">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-semibold text-teal-900">Thyme</h1>
+        <h1 className="mb-1 text-2xl font-semibold text-thyme-900">Thyme</h1>
         <p className="mb-6 text-sm text-zinc-500">
           {mode === "login" ? "Sign in to your account" : "Create your account"}
         </p>
@@ -81,7 +81,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="mt-2 rounded-lg bg-teal-800 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+            className="mt-2 rounded-lg bg-thyme-800 px-4 py-2 text-sm font-medium text-white hover:bg-thyme-700 disabled:opacity-50"
           >
             {busy ? "Working…" : mode === "login" ? "Sign in" : "Sign up"}
           </button>
@@ -92,7 +92,7 @@ export default function LoginPage() {
             setMode(mode === "login" ? "signup" : "login");
             setError(null);
           }}
-          className="mt-4 text-sm text-teal-700 hover:underline"
+          className="mt-4 text-sm text-thyme-700 hover:underline"
         >
           {mode === "login" ? "New here? Create an account" : "Already have an account? Sign in"}
         </button>

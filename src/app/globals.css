@@ -9,6 +9,17 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-zain);
+
+  /* Thyme brand palette, anchored on #396E77 */
+  --color-thyme-50: #eef4f5;
+  --color-thyme-100: #dbe8ea;
+  --color-thyme-200: #b7d0d4;
+  --color-thyme-400: #679aa3;
+  --color-thyme-600: #4a7f89;
+  --color-thyme-700: #427680;
+  --color-thyme-800: #396e77;
+  --color-thyme-900: #396e77;
+  --color-thyme-950: #234249;
 }
 
 body {

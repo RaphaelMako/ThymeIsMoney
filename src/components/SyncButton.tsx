@@ -21,7 +21,7 @@ export default function SyncButton() {
     <button
       onClick={handleSync}
       disabled={busy}
-      className="rounded-lg border border-teal-800 px-4 py-2 text-sm font-medium text-teal-800 hover:bg-teal-50 disabled:opacity-50"
+      className="rounded-lg border border-thyme-800 px-4 py-2 text-sm font-medium text-thyme-800 hover:bg-thyme-50 disabled:opacity-50"
     >
       {busy ? "Syncing…" : "Sync transactions"}
     </button>

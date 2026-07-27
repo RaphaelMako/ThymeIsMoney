@@ -54,7 +54,7 @@ export default function BudgetSetup({ suggestedIncome }: { suggestedIncome: numb
         <button
           type="submit"
           disabled={busy}
-          className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+          className="rounded-lg bg-thyme-800 px-4 py-2 text-sm font-medium text-white hover:bg-thyme-700 disabled:opacity-50"
         >
           {busy ? "Building…" : "Create 50/30/20 budget"}
         </button>
