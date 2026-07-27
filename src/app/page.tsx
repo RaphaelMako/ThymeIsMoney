@@ -2,8 +2,12 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { calculateNetWorth } from "@/lib/networth";
+import { categoryComparison, pickBubbles, weeklySpendComparison } from "@/lib/insights";
 import BalanceHero from "@/components/BalanceHero";
+import CategoryBubbles from "@/components/CategoryBubbles";
+import CategoryComparisonChart from "@/components/CategoryComparisonChart";
 import PlaidLinkButton from "@/components/PlaidLinkButton";
+import SpendingInsightCard from "@/components/SpendingInsightCard";
 import SyncButton from "@/components/SyncButton";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -31,6 +35,20 @@ export default async function Home() {
     amount: Number(t.amount),
   }));
   const recent = transactions.slice(0, 10);
+
+  const spendTxns = transactions.map((t) => ({
+    date: t.date.toISOString().slice(0, 10),
+    amount: Number(t.amount),
+    category: t.plaidCategoryPrimary,
+  }));
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const weekly = weeklySpendComparison(spendTxns, todayIso);
+  const comparison = categoryComparison(spendTxns, todayIso);
+  const daysInMonth = new Date(today.getUTCFullYear(), today.getUTCMonth() + 1, 0).getDate();
+  const bubbles = pickBubbles(comparison, today.getUTCDate() / daysInMonth);
+  const overspending = bubbles.filter((b) => b.direction === "over");
+  const saving = bubbles.filter((b) => b.direction === "under");
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
@@ -68,6 +86,7 @@ export default async function Home() {
                 : "Link a bank account to see transactions."}
             </p>
           ) : (
+            <div className="grid items-start gap-4 md:grid-cols-[1fr_270px]">
             <div className="overflow-hidden rounded-xl bg-white shadow-sm">
               <table className="w-full text-sm">
                 <thead>
@@ -103,8 +122,48 @@ export default async function Home() {
                 </tbody>
               </table>
             </div>
+            <SpendingInsightCard comparison={weekly} />
+            </div>
           )}
         </section>
+
+        {bubbles.length > 0 && (
+          <section className="flex flex-col gap-6">
+            <p className="mx-auto max-w-xl text-center text-lg font-bold leading-relaxed text-zinc-900">
+              {overspending.length > 0 && (
+                <>
+                  You&apos;re way overspending on{" "}
+                  {overspending.map((b, i) => (
+                    <span key={b.category}>
+                      <span className="text-red-600">{b.label.toLowerCase()}</span>
+                      {i < overspending.length - 2 ? ", " : i === overspending.length - 2 ? ", and " : ""}
+                    </span>
+                  ))}
+                  .{" "}
+                </>
+              )}
+              {saving.length > 0 && (
+                <>
+                  {overspending.length > 0 ? "But, you're" : "You're"} saving well on{" "}
+                  {saving.map((b, i) => (
+                    <span key={b.category}>
+                      <span className="text-green-700">{b.label.toLowerCase()}</span>
+                      {i < saving.length - 2 ? ", " : i === saving.length - 2 ? ", and " : ""}
+                    </span>
+                  ))}
+                  !
+                </>
+              )}
+            </p>
+            <CategoryBubbles bubbles={bubbles} />
+          </section>
+        )}
+
+        {comparison.length > 0 && (
+          <section>
+            <CategoryComparisonChart rows={comparison.slice(0, 14)} />
+          </section>
+        )}
 
         <section>
           <h2 className="mb-3 text-2xl font-bold text-teal-900">Accounts</h2>
