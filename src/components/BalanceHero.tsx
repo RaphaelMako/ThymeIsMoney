@@ -114,18 +114,40 @@ export default function BalanceHero({
   const [range, setRange] = useState<Range>("monthly");
   const series = useMemo(() => buildSeries(netWorth, transactions, range), [netWorth, transactions, range]);
 
-  // Pad the bottom of the y-domain so the line never touches the chart
-  // floor — the under-line gradient needs room to finish fading to white.
+  // Pad the y-domain: room below so the line never touches the chart floor
+  // (the gradient needs space to finish fading to white), and slight
+  // headroom above so the stroke never clips the chart's top edge.
   const [domainLo, domainHi] = useMemo(() => {
     const values = series.map((p) => p.balance);
     const min = Math.min(...values);
     const max = Math.max(...values);
-    const pad = (max - min || Math.abs(min) || 1) * 0.15;
-    return [min - pad, max];
+    const span = max - min || Math.abs(min) || 1;
+    return [min - span * 0.15, max + span * 0.05];
   }, [series]);
 
   return (
     <section className="flex h-[90vh] min-h-[560px] flex-col">
+      {/* True inner shadow for the hero text: invert the glyph alpha, blur
+          and push it down, tint it, keep only the part inside the glyphs,
+          and draw it over the original text. Applied via .text-inset. */}
+      <svg aria-hidden="true" className="absolute h-0 w-0">
+        <defs>
+          <filter id="textInnerShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feComponentTransfer in="SourceAlpha" result="invAlpha">
+              <feFuncA type="table" tableValues="1 0" />
+            </feComponentTransfer>
+            <feGaussianBlur in="invAlpha" stdDeviation="4" result="blur" />
+            <feOffset in="blur" dy="4" result="offsetBlur" />
+            <feFlood floodColor="#03211f" floodOpacity="0.55" result="color" />
+            <feComposite in="color" in2="offsetBlur" operator="in" result="shadowShape" />
+            <feComposite in="shadowShape" in2="SourceAlpha" operator="in" result="innerShadow" />
+            <feMerge>
+              <feMergeNode in="SourceGraphic" />
+              <feMergeNode in="innerShadow" />
+            </feMerge>
+          </filter>
+        </defs>
+      </svg>
       <div className="flex min-h-0 flex-1 flex-col bg-thyme-900">
         <div className="mx-auto w-[85%] pt-14">
           <h1 className="text-inset text-4xl font-extrabold md:text-5xl">
@@ -136,25 +158,64 @@ export default function BalanceHero({
           </p>
           <p className="mt-2 text-base text-thyme-200">Across all accounts.</p>
         </div>
-        <div className="min-h-0 w-full flex-1 pt-6">
+        {/*
+          The gradient is painted on the chart's background, anchored to the
+          container: pure white at the bottom, heading toward #166767 at the
+          top. The Area then fills the region ABOVE the line with the solid
+          hero color, so the background gradient only shows through below
+          the line — reaching exactly as far toward #166767 as the line is
+          high at any given point.
+        */}
+        <div
+          className="hero-chart mt-6 min-h-0 w-full flex-1"
+          style={{ background: "linear-gradient(to top, #ffffff 0%, #166767 100%)" }}
+        >
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={series} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
+            <AreaChart data={series} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <defs>
-                <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#166767" />
-                  <stop offset="100%" stopColor="#ffffff" />
-                </linearGradient>
+                {/* Emits only the outer shadow of the below-line shape: blur its
+                    silhouette, push it upward, tint it, then cut away the part
+                    overlapping the shape itself. */}
+                <filter id="heroLineShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="blur" />
+                  <feOffset in="blur" dy="-3" result="offsetBlur" />
+                  <feFlood floodColor="#082222" floodOpacity="0.6" result="color" />
+                  <feComposite in="color" in2="offsetBlur" operator="in" result="shadow" />
+                  <feComposite in="shadow" in2="SourceAlpha" operator="out" />
+                </filter>
               </defs>
               <XAxis dataKey="date" hide />
               <YAxis hide domain={[domainLo, domainHi]} />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#ffffff55" }} />
+              {/* Solid header color above the line */}
+              <Area
+                type="monotone"
+                dataKey="balance"
+                baseValue={domainHi}
+                stroke="none"
+                fill="#396e77"
+                fillOpacity={1}
+                isAnimationActive={false}
+              />
+              {/* Below-line mass, rendered as shadow only */}
+              <Area
+                type="monotone"
+                dataKey="balance"
+                baseValue={domainLo}
+                stroke="none"
+                fill="#000000"
+                fillOpacity={1}
+                className="hero-shadow-area"
+                isAnimationActive={false}
+              />
+              {/* Crisp line on top of the shadow */}
               <Area
                 type="monotone"
                 dataKey="balance"
                 baseValue={domainLo}
                 stroke="#ffffff"
                 strokeWidth={2.5}
-                fill="url(#balanceGradient)"
+                fillOpacity={0}
                 isAnimationActive={false}
               />
             </AreaChart>

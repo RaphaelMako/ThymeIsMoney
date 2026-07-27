@@ -29,14 +29,20 @@ body {
 }
 
 /*
- * Inset text shadow: with the text color transparent and the element's
- * background clipped to the glyphs, the text-shadow paints through the
- * inside of the letters instead of behind them.
+ * The line plus the gradient region below it act as one shape casting a
+ * shadow up onto the #396E77 header. The filter renders only the outer
+ * shadow of that shape (see #heroLineShadow in BalanceHero).
+ */
+.hero-chart .hero-shadow-area .recharts-area-area {
+  filter: url(#heroLineShadow);
+}
+
+/*
+ * True inner text shadow: the #textInnerShadow SVG filter (defined in
+ * BalanceHero) paints a blurred, offset shadow strictly inside the
+ * glyphs, so the text keeps its solid color.
  */
 .text-inset {
-  background-color: #f0f6f5;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 3px 5px rgba(0, 26, 24, 0.4);
+  color: #edf4f3;
+  filter: url(#textInnerShadow);
 }
