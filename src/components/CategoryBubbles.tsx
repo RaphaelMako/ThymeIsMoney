@@ -34,6 +34,9 @@ export default function CategoryBubbles({ bubbles }: { bubbles: Bubble[] }) {
                   width: inner,
                   height: inner,
                   backgroundColor: over ? "#7e363c" : "#84c17b",
+                  boxShadow: over
+                    ? "inset 0 5px 10px rgba(30, 5, 8, 0.55)"
+                    : "0 5px 10px rgba(20, 40, 18, 0.35)",
                 }}
               />
             </div>

@@ -30,7 +30,7 @@ export default async function MonthPage({ params }: { params: Promise<{ month: s
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
       <header className="bg-teal-900 px-6 py-10 text-white">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-[85%]">
           <Link href="/" className="text-sm text-teal-200 hover:text-white">
             ← Back to dashboard
           </Link>
@@ -40,7 +40,7 @@ export default async function MonthPage({ params }: { params: Promise<{ month: s
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-8">
+      <main className="mx-auto flex w-[85%] flex-1 flex-col gap-8 py-8">
         <section>
           <h2 className="mb-3 text-2xl font-bold text-teal-900">Spending</h2>
           <SpendingTable rows={rows} />

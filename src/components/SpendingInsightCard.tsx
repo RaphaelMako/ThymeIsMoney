@@ -10,15 +10,15 @@ export default function SpendingInsightCard({ comparison }: { comparison: Weekly
   const less = diff >= 0;
 
   return (
-    <div className="flex flex-col justify-between gap-2 rounded-xl bg-white p-4 shadow-sm">
-      <p className="text-base font-bold leading-snug text-zinc-900">
+    <div className="flex flex-col justify-between gap-2">
+      <p className="text-xl font-bold leading-snug text-zinc-900">
         You&apos;re spending{" "}
         <span className={less ? "text-green-700" : "text-red-600"}>
           {currency.format(Math.abs(diff))} {less ? "less" : "more"}
         </span>{" "}
         than usual
       </p>
-      <div className="h-28">
+      <div className="h-36">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 4, right: 6, bottom: 0, left: 6 }}>
             <XAxis

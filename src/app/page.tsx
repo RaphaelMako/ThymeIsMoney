@@ -45,7 +45,7 @@ export default async function Home() {
     date: t.date.toISOString().slice(0, 10),
     amount: Number(t.amount),
   }));
-  const recent = transactions.slice(0, 10);
+  const recent = transactions.slice(0, 5);
 
   const spendTxns = transactions.map((t) => ({
     date: t.date.toISOString().slice(0, 10),
@@ -146,7 +146,7 @@ export default async function Home() {
         </form>
       </div>
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 pb-10">
+      <main className="mx-auto flex w-[85%] flex-1 flex-col gap-12 pb-16 pt-4">
         <div className="flex gap-3">
           <PlaidLinkButton />
           {hasLinkedBank && <SyncButton />}
@@ -161,11 +161,11 @@ export default async function Home() {
                 : "Link a bank account to see transactions."}
             </p>
           ) : (
-            <div className="grid items-start gap-4 md:grid-cols-[1fr_270px]">
-            <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-              <table className="w-full text-sm">
+            <div className="grid items-start gap-10 md:grid-cols-[2fr_1fr]">
+            <div>
+              <table className="w-full text-base">
                 <thead>
-                  <tr className="border-b border-zinc-100 text-left text-xs text-zinc-500">
+                  <tr className="border-b border-zinc-200 text-left text-sm text-zinc-500">
                     <th className="px-4 py-3 font-medium">Name</th>
                     <th className="px-4 py-3 font-medium">Date</th>
                     <th className="px-4 py-3 font-medium">Category</th>
@@ -174,7 +174,7 @@ export default async function Home() {
                 </thead>
                 <tbody>
                   {recent.map((t) => (
-                    <tr key={t.id} className="border-b border-zinc-50 last:border-0">
+                    <tr key={t.id} className="border-b border-zinc-100 last:border-0">
                       <td className="px-4 py-3 font-medium text-zinc-900">
                         {t.merchantName ?? t.name}
                       </td>

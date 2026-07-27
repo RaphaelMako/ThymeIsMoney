@@ -26,11 +26,11 @@ export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-base">
           <thead>
-            <tr className="border-b border-zinc-100 text-left text-xs text-zinc-500">
+            <tr className="border-b border-zinc-200 text-left text-sm text-zinc-500">
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Category</th>
@@ -42,7 +42,7 @@ export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
           </thead>
           <tbody>
             {visible.map((row) => (
-              <tr key={row.id} className="border-b border-zinc-50 last:border-0">
+              <tr key={row.id} className="border-b border-zinc-100 last:border-0">
                 <td className="max-w-48 truncate px-4 py-3 font-medium text-zinc-900">
                   {row.name}
                 </td>
@@ -70,7 +70,7 @@ export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
       {hiddenCount > 0 && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full border-t border-zinc-100 py-3 text-sm font-medium text-teal-800 hover:bg-teal-50"
+          className="w-full py-3 text-base font-bold text-teal-800 hover:text-teal-600"
         >
           {expanded ? "Show less" : `Show ${hiddenCount} more`}
         </button>

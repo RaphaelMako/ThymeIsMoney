@@ -21,8 +21,8 @@ export default function BudgetCard({ groups }: { groups: BudgetGroupSummary[] })
   const data = groups.filter((g) => g.spent > 0);
 
   return (
-    <div className="grid items-center gap-6 rounded-2xl bg-white p-6 shadow-sm md:grid-cols-2">
-      <div>
+    <div className="grid items-center gap-10 md:grid-cols-2">
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
         {groups.map((g, i) => (
           <div
             key={g.group}
@@ -45,7 +45,7 @@ export default function BudgetCard({ groups }: { groups: BudgetGroupSummary[] })
         ))}
       </div>
 
-      <div className="h-56">
+      <div className="h-72">
         {data.length === 0 ? (
           <p className="flex h-full items-center justify-center text-sm text-zinc-500">
             No spending yet this month.

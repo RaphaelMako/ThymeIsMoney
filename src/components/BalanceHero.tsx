@@ -115,23 +115,25 @@ export default function BalanceHero({
   const series = useMemo(() => buildSeries(netWorth, transactions, range), [netWorth, transactions, range]);
 
   return (
-    <section>
-      <div className="bg-teal-900 pt-10 text-white">
-        <div className="mx-auto w-full max-w-3xl px-6">
-          <h1 className="text-2xl font-bold">
+    <section className="flex h-[90vh] min-h-[560px] flex-col">
+      <div className="flex min-h-0 flex-1 flex-col bg-teal-900">
+        <div className="mx-auto w-[85%] pt-14">
+          <h1 className="text-inset text-4xl font-extrabold md:text-5xl">
             {greeting()} {name}
           </h1>
-          <p className="mt-3 text-5xl font-bold tracking-tight">{currency.format(netWorth)}</p>
-          <p className="mt-2 text-xs text-teal-200">Across all accounts.</p>
+          <p className="text-inset mt-4 text-7xl font-extrabold tracking-tight md:text-8xl">
+            {currency.format(netWorth)}
+          </p>
+          <p className="mt-2 text-base text-teal-200">Across all accounts.</p>
         </div>
-        <div className="mt-6 h-44 w-full">
+        <div className="min-h-0 w-full flex-1 pt-6">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={series} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ffffff" stopOpacity={0.25} />
-                  <stop offset="55%" stopColor="#f4f8f8" stopOpacity={0.6} />
-                  <stop offset="100%" stopColor="#fafafa" stopOpacity={0.97} />
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity={0.16} />
+                  <stop offset="45%" stopColor="#eff5f4" stopOpacity={0.55} />
+                  <stop offset="100%" stopColor="#fafafa" stopOpacity={1} />
                 </linearGradient>
               </defs>
               <XAxis dataKey="date" hide />
@@ -142,7 +144,7 @@ export default function BalanceHero({
                 dataKey="balance"
                 baseValue="dataMin"
                 stroke="#ffffff"
-                strokeWidth={2}
+                strokeWidth={2.5}
                 fill="url(#balanceGradient)"
                 isAnimationActive={false}
               />
@@ -151,12 +153,12 @@ export default function BalanceHero({
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-wrap justify-center gap-3 px-6 py-5">
+      <div className="flex flex-wrap items-center justify-center gap-4 py-6">
         {RANGES.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setRange(key)}
-            className={`rounded-full px-5 py-1.5 text-sm font-medium text-white transition-colors ${
+            className={`rounded-full px-6 py-2 text-base font-bold text-white transition-colors ${
               range === key
                 ? "bg-teal-950 ring-2 ring-teal-950/30"
                 : "bg-teal-800 hover:bg-teal-700"
