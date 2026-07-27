@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth (Auth.js) ----------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  authAccounts   Account[]
+  plaidItems     PlaidItem[]
+  transactions   Transaction[]
+  categories     Category[]
+  budgetProfiles BudgetProfile[]
+}
+
+// OAuth account linkage (Auth.js adapter model — not a bank account)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// ---------- Plaid / banking ----------
+
+model PlaidItem {
+  id              String   @id @default(cuid())
+  userId          String
+  plaidItemId     String   @unique
+  accessToken     String
+  institutionId   String?
+  institutionName String?
+  nextCursor      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccounts BankAccount[]
+}
+
+model BankAccount {
+  id               String   @id @default(cuid())
+  plaidItemId      String
+  plaidAccountId   String   @unique
+  name             String
+  officialName     String?
+  mask             String?
+  type             String
+  subtype          String?
+  currentBalance   Decimal? @db.Decimal(14, 2)
+  availableBalance Decimal? @db.Decimal(14, 2)
+  isoCurrencyCode  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  plaidItem    PlaidItem     @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+// ---------- Categories ----------
+
+enum CategorySource {
+  PLAID
+  USER
+  ML
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  // null userId = system category seeded from Plaid's taxonomy
+  userId       String?
+  name         String
+  color        String?
+  plaidPrimary String? // Plaid personal_finance_category.primary this maps to
+  createdAt    DateTime @default(now())
+
+  user             User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+  budgetCategories BudgetCategory[]
+  eventsFrom       CategorizationEvent[] @relation("fromCategory")
+  eventsTo         CategorizationEvent[] @relation("toCategory")
+
+  @@unique([userId, name])
+}
+
+model Transaction {
+  id                   String         @id @default(cuid())
+  plaidTransactionId   String         @unique
+  bankAccountId        String
+  userId               String
+  name                 String
+  merchantName         String?
+  amount               Decimal        @db.Decimal(14, 2) // Plaid convention: positive = money out
+  isoCurrencyCode      String?
+  date                 DateTime       @db.Date
+  pending              Boolean        @default(false)
+  plaidCategoryPrimary String?
+  plaidCategoryDetail  String?
+  categoryId           String?
+  categorySource       CategorySource @default(PLAID)
+  description          String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  bankAccount BankAccount           @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+  catEvents   CategorizationEvent[]
+
+  @@index([userId, date])
+  @@index([categoryId])
+}
+
+// Audit trail of re-categorizations — training data for the future ML categorizer
+model CategorizationEvent {
+  id             String   @id @default(cuid())
+  transactionId  String
+  fromCategoryId String?
+  toCategoryId   String
+  createdAt      DateTime @default(now())
+
+  transaction  Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fromCategory Category?   @relation("fromCategory", fields: [fromCategoryId], references: [id], onDelete: SetNull)
+  toCategory   Category    @relation("toCategory", fields: [toCategoryId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id            String   @id @default(cuid())
+  transactionId String
+  filename      String
+  mimeType      String
+  size          Int
+  path          String // local file path for now; swap for object storage later
+  createdAt     DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Budgeting ----------
+
+enum BudgetProfileType {
+  FIFTY_THIRTY_TWENTY
+  CUSTOM
+}
+
+enum BudgetGroup {
+  NEEDS
+  WANTS
+  SAVINGS
+}
+
+model BudgetProfile {
+  id            String            @id @default(cuid())
+  userId        String
+  name          String
+  type          BudgetProfileType @default(FIFTY_THIRTY_TWENTY)
+  isActive      Boolean           @default(true)
+  monthlyIncome Decimal?          @db.Decimal(14, 2)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetCategories BudgetCategory[]
+}
+
+model BudgetCategory {
+  id              String      @id @default(cuid())
+  budgetProfileId String
+  categoryId      String
+  group           BudgetGroup
+  monthlyLimit    Decimal     @db.Decimal(14, 2)
+
+  budgetProfile BudgetProfile @relation(fields: [budgetProfileId], references: [id], onDelete: Cascade)
+  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetProfileId, categoryId])
+}

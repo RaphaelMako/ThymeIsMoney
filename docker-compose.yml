@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: thyme-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: thyme
+      POSTGRES_PASSWORD: thyme
+      POSTGRES_DB: thyme
+    ports:
+      - "5432:5432"
+    volumes:
+      - thyme_pgdata:/var/lib/postgresql/data
+
+volumes:
+  thyme_pgdata:
