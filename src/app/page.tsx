@@ -2,7 +2,13 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { calculateNetWorth } from "@/lib/networth";
-import { categoryComparison, pickBubbles, weeklySpendComparison } from "@/lib/insights";
+import {
+  categoryComparison,
+  isSpend,
+  pickBubbles,
+  prettyCategory,
+  weeklySpendComparison,
+} from "@/lib/insights";
 import { GROUP_SHARE, groupForPlaidCategory } from "@/lib/budget";
 import BalanceHero from "@/components/BalanceHero";
 import BudgetCard, { type BudgetGroupSummary } from "@/components/BudgetCard";
@@ -12,6 +18,7 @@ import CategoryComparisonChart from "@/components/CategoryComparisonChart";
 import PlaidLinkButton from "@/components/PlaidLinkButton";
 import SpendingInsightCard from "@/components/SpendingInsightCard";
 import SyncButton from "@/components/SyncButton";
+import ThisMonthSpending, { type MonthSpendingRow } from "@/components/ThisMonthSpending";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -28,6 +35,7 @@ export default async function Home() {
     db.transaction.findMany({
       where: { userId },
       orderBy: { date: "desc" },
+      include: { _count: { select: { attachments: true } } },
     }),
     db.budgetProfile.findFirst({
       where: { userId, isActive: true },
@@ -94,6 +102,44 @@ export default async function Home() {
       allocated: Math.round(income * GROUP_SHARE[group] * 100) / 100,
     }));
   }
+
+  // This Month's Spending table
+  const thisMonthKey = todayIso.slice(0, 7);
+  const monthTransactions = transactions.filter(
+    (t) => t.date.toISOString().slice(0, 7) === thisMonthKey && Number(t.amount) > 0
+  );
+  const monthSpendTotal = monthTransactions.reduce((sum, t) => {
+    const txn = {
+      date: t.date.toISOString().slice(0, 10),
+      amount: Number(t.amount),
+      category: t.plaidCategoryPrimary,
+    };
+    return isSpend(txn) ? sum + txn.amount : sum;
+  }, 0);
+  const monthRows: MonthSpendingRow[] = monthTransactions.map((t) => {
+    const amount = Number(t.amount);
+    const spend = isSpend({
+      date: t.date.toISOString().slice(0, 10),
+      amount,
+      category: t.plaidCategoryPrimary,
+    });
+    return {
+      id: t.id,
+      name: t.merchantName ?? t.name,
+      date: t.date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }),
+      category: t.plaidCategoryPrimary ? prettyCategory(t.plaidCategoryPrimary) : "—",
+      cost: currency.format(amount),
+      description: t.description,
+      receipts: t._count.attachments,
+      percentOfMonthly:
+        spend && monthSpendTotal > 0 ? Math.round((amount / monthSpendTotal) * 1000) / 10 : null,
+    };
+  });
 
   // Suggest income from deposits categorized as income by Plaid
   const incomeMonths = new Map<string, number>();
@@ -231,6 +277,15 @@ export default async function Home() {
             ) : (
               <BudgetSetup suggestedIncome={suggestedIncome} />
             )}
+          </section>
+        )}
+
+        {hasLinkedBank && (
+          <section>
+            <h2 className="mb-3 text-2xl font-bold text-teal-900">
+              This Month&apos;s Spending
+            </h2>
+            <ThisMonthSpending rows={monthRows} />
           </section>
         )}
 
