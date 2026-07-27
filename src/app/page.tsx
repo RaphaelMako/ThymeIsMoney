@@ -3,7 +3,10 @@ import { auth, signOut } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { calculateNetWorth } from "@/lib/networth";
 import { categoryComparison, pickBubbles, weeklySpendComparison } from "@/lib/insights";
+import { GROUP_SHARE, groupForPlaidCategory } from "@/lib/budget";
 import BalanceHero from "@/components/BalanceHero";
+import BudgetCard, { type BudgetGroupSummary } from "@/components/BudgetCard";
+import BudgetSetup from "@/components/BudgetSetup";
 import CategoryBubbles from "@/components/CategoryBubbles";
 import CategoryComparisonChart from "@/components/CategoryComparisonChart";
 import PlaidLinkButton from "@/components/PlaidLinkButton";
@@ -17,7 +20,7 @@ export default async function Home() {
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const [bankAccounts, transactions] = await Promise.all([
+  const [bankAccounts, transactions, budgetProfile] = await Promise.all([
     db.bankAccount.findMany({
       where: { plaidItem: { userId } },
       orderBy: { name: "asc" },
@@ -25,6 +28,10 @@ export default async function Home() {
     db.transaction.findMany({
       where: { userId },
       orderBy: { date: "desc" },
+    }),
+    db.budgetProfile.findFirst({
+      where: { userId, isActive: true },
+      include: { budgetCategories: { include: { category: true } } },
     }),
   ]);
 
@@ -49,6 +56,57 @@ export default async function Home() {
   const bubbles = pickBubbles(comparison, today.getUTCDate() / daysInMonth);
   const overspending = bubbles.filter((b) => b.direction === "over");
   const saving = bubbles.filter((b) => b.direction === "under");
+
+  // Budget: per-category limits feed the comparison chart; group totals feed the card
+  const budgetByPrimary = new Map<string, number>();
+  if (budgetProfile) {
+    for (const bc of budgetProfile.budgetCategories) {
+      if (bc.category.plaidPrimary) {
+        budgetByPrimary.set(
+          bc.category.plaidPrimary,
+          (budgetByPrimary.get(bc.category.plaidPrimary) ?? 0) + Number(bc.monthlyLimit)
+        );
+      }
+    }
+  }
+  const comparisonRows = comparison
+    .slice(0, 14)
+    .map((r) => ({ ...r, monthlyBudget: budgetByPrimary.get(r.category) }));
+
+  let budgetGroups: BudgetGroupSummary[] | null = null;
+  if (budgetProfile?.monthlyIncome) {
+    const income = Number(budgetProfile.monthlyIncome);
+    const thisMonth = todayIso.slice(0, 7);
+    const spent: Record<"NEEDS" | "WANTS" | "SAVINGS", number> = {
+      NEEDS: 0,
+      WANTS: 0,
+      SAVINGS: 0,
+    };
+    for (const t of spendTxns) {
+      if (t.amount <= 0 || t.date.slice(0, 7) !== thisMonth) continue;
+      const group = groupForPlaidCategory(t.category);
+      if (group) spent[group] += t.amount;
+    }
+    budgetGroups = (["NEEDS", "WANTS", "SAVINGS"] as const).map((group) => ({
+      group,
+      label: group.charAt(0) + group.slice(1).toLowerCase(),
+      spent: Math.round(spent[group] * 100) / 100,
+      allocated: Math.round(income * GROUP_SHARE[group] * 100) / 100,
+    }));
+  }
+
+  // Suggest income from deposits categorized as income by Plaid
+  const incomeMonths = new Map<string, number>();
+  for (const t of spendTxns) {
+    if (t.amount < 0 && t.category === "INCOME") {
+      const month = t.date.slice(0, 7);
+      incomeMonths.set(month, (incomeMonths.get(month) ?? 0) + Math.abs(t.amount));
+    }
+  }
+  const suggestedIncome =
+    incomeMonths.size > 0
+      ? [...incomeMonths.values()].reduce((a, b) => a + b, 0) / incomeMonths.size
+      : null;
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
@@ -161,7 +219,18 @@ export default async function Home() {
 
         {comparison.length > 0 && (
           <section>
-            <CategoryComparisonChart rows={comparison.slice(0, 14)} />
+            <CategoryComparisonChart rows={comparisonRows} />
+          </section>
+        )}
+
+        {hasLinkedBank && (
+          <section>
+            <h2 className="mb-3 text-2xl font-bold text-teal-900">Budget</h2>
+            {budgetGroups ? (
+              <BudgetCard groups={budgetGroups} />
+            ) : (
+              <BudgetSetup suggestedIncome={suggestedIncome} />
+            )}
           </section>
         )}
 
