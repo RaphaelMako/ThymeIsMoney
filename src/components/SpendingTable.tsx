@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export type MonthSpendingRow = {
+export type SpendingRow = {
   id: string;
   name: string;
   date: string; // pre-formatted
@@ -14,15 +14,15 @@ export type MonthSpendingRow = {
   percentOfMonthly: number | null;
 };
 
-const INITIAL_ROWS = 15;
+const INITIAL_ROWS = 5;
 
-export default function ThisMonthSpending({ rows }: { rows: MonthSpendingRow[] }) {
+export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? rows : rows.slice(0, INITIAL_ROWS);
   const hiddenCount = rows.length - INITIAL_ROWS;
 
   if (rows.length === 0) {
-    return <p className="text-sm text-zinc-500">No transactions yet this month.</p>;
+    return <p className="text-sm text-zinc-500">No transactions this month.</p>;
   }
 
   return (
