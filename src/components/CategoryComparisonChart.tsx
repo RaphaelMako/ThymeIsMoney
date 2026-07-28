@@ -23,20 +23,29 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 /**
- * The largest budget renders at this share of the chart height, leaving
- * headroom above it for categories that overspend.
+ * In dollars, the largest budget renders at this share of the plot; in
+ * percent, this is where 100% of budget lands. Either way it leaves headroom
+ * above for categories that overspend.
  */
 const BUDGET_BAND = 0.72;
 
 /**
- * Floor for bar heights, as a share of the plot. Values are remapped into
- * [MIN_BAR_PCT, 100] so a small category still reads clearly instead of
- * collapsing into an unlabelable sliver.
+ * Floor for a column's overall height in dollar mode, so a small category
+ * never collapses into an unreadable sliver.
  */
-const MIN_BAR_PCT = 50;
+const MIN_COLUMN_PCT = 50;
+
+/** Hard floor for an individual bar, guarding against near-zero values vanishing. */
+const MIN_BAR_PCT = 6;
+
+/** Column geometry, in px — columns are placed by transform so they can slide. */
+const COLUMN_W = 56;
+const COLUMN_GAP = 12;
 
 /** Pixel height of the plot area (h-72), used to decide if a label fits inside its bar. */
 const CHART_HEIGHT_PX = 288;
+
+const SLIDE = "transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1), height 420ms cubic-bezier(0.22, 0.61, 0.36, 1)";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -49,47 +58,101 @@ export default function CategoryComparisonChart({ rows }: { rows: ComparisonRow[
   const [ticker, setTicker] = useState<Ticker>("nominal");
   const [hovered, setHovered] = useState<string | null>(null);
 
+  const hasAnyBudget = rows.some((r) => (r.monthlyBudget ?? 0) > 0);
+  const mode: Ticker = hasAnyBudget ? ticker : "nominal";
+
   const sorted = useMemo(() => {
     const withUsage = rows.map((r) => ({
       ...r,
       usage: r.monthlyBudget && r.monthlyBudget > 0 ? r.thisMonth / r.monthlyBudget : null,
     }));
 
+    // Percent of budget is meaningless without one, so those drop out in % mode
+    const visible =
+      mode === "percent" ? withUsage.filter((r) => (r.monthlyBudget ?? 0) > 0) : withUsage;
+
     if (sortKey === "budgetUsage") {
       // Furthest under budget on the left, at-or-over budget on the right.
       // Categories with no budget can't be ranked, so they trail at the end.
-      return withUsage.sort((a, b) => {
+      return visible.sort((a, b) => {
         if (a.usage === null && b.usage === null) return b.thisMonth - a.thisMonth;
         if (a.usage === null) return 1;
         if (b.usage === null) return -1;
         return a.usage - b.usage;
       });
     }
-    return withUsage.sort((a, b) => (b[sortKey] ?? 0) - (a[sortKey] ?? 0));
-  }, [rows, sortKey]);
 
-  // Budget sets the scale; overspending grows past it up to the chart ceiling.
-  const heightPct = useMemo(() => {
+    // Value sorts follow the ticker: dollars in $ mode, share of budget in %
+    const metric = (r: (typeof visible)[number]) => {
+      const value = r[sortKey] ?? 0;
+      if (mode === "nominal") return value;
+      return r.monthlyBudget && r.monthlyBudget > 0 ? value / r.monthlyBudget : -1;
+    };
+    return visible.sort((a, b) => metric(b) - metric(a));
+  }, [rows, sortKey, mode]);
+
+  const barsFor = useMemo(() => {
     const maxBudget = Math.max(0, ...rows.map((r) => r.monthlyBudget ?? 0));
     const maxAny = Math.max(
       1,
       ...rows.flatMap((r) => [r.thisMonth, r.monthlyAverage, r.monthlyBudget ?? 0])
     );
     const fullHeightValue = maxBudget > 0 ? maxBudget / BUDGET_BAND : maxAny;
-    return (value: number) =>
-      MIN_BAR_PCT + Math.min(value / fullHeightValue, 1) * (100 - MIN_BAR_PCT);
-  }, [rows]);
+
+    return (row: ComparisonRow) => {
+      // Paint tallest first so shorter bars sit in front and cast onto them
+      const bars = SERIES.map((s) => ({ ...s, value: row[s.key] ?? 0 }))
+        .filter((b) => b.value > 0)
+        .sort((a, b) => b.value - a.value);
+
+      if (mode === "percent") {
+        // Every budget bar lands on the band, so a category spending 120% of a
+        // small budget stands taller than one at 110% of a large budget.
+        const budget = row.monthlyBudget ?? 0;
+        return bars.map((b) => ({
+          ...b,
+          pct:
+            budget > 0
+              ? Math.max(Math.min((b.value / budget) * BUDGET_BAND, 1) * 100, MIN_BAR_PCT)
+              : MIN_BAR_PCT,
+        }));
+      }
+
+      // Dollars: the column sits on the global budget-relative scale with a
+      // floor, then bars divide that height by their true ratio to the tallest
+      // so the layered sections stay legible.
+      const columnMax = bars[0]?.value ?? 0;
+      const columnPct =
+        MIN_COLUMN_PCT + Math.min(columnMax / fullHeightValue, 1) * (100 - MIN_COLUMN_PCT);
+      return bars.map((b) => ({
+        ...b,
+        pct: columnMax > 0 ? Math.max((b.value / columnMax) * columnPct, MIN_BAR_PCT) : MIN_BAR_PCT,
+      }));
+    };
+  }, [rows, mode]);
+
+  // Columns keep a stable DOM order and are placed by transform, so a change
+  // of sort or mode slides them instead of snapping to a new order.
+  const positions = useMemo(
+    () => new Map(sorted.map((r, i) => [r.category, i])),
+    [sorted]
+  );
+  const stable = useMemo(
+    () => [...sorted].sort((a, b) => a.category.localeCompare(b.category)),
+    [sorted]
+  );
 
   if (rows.length === 0) return null;
 
   const format = (value: number | undefined, budget: number | undefined) => {
     if (value == null || value === 0) return "—";
-    if (ticker === "nominal") return currency.format(value);
+    if (mode === "nominal") return currency.format(value);
     if (!budget) return "—";
     return `${Math.round((value / budget) * 100)}%`;
   };
 
   const active = sorted.find((r) => r.category === hovered) ?? null;
+  const hiddenCount = rows.length - sorted.length;
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -126,9 +189,16 @@ export default function CategoryComparisonChart({ rows }: { rows: ComparisonRow[
               <button
                 key={t}
                 onClick={() => setTicker(t)}
-                title={t === "nominal" ? "Show dollar amounts" : "Show percent of budget"}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition-colors ${
-                  ticker === t ? "bg-thyme-800 text-white" : "text-zinc-500 hover:text-zinc-800"
+                disabled={t === "percent" && !hasAnyBudget}
+                title={
+                  t === "nominal"
+                    ? "Size bars by dollar amount"
+                    : hasAnyBudget
+                      ? "Size bars by percent of budget"
+                      : "Set up a budget to compare by percent"
+                }
+                className={`rounded-full px-3 py-1 text-xs font-bold transition-colors disabled:opacity-40 ${
+                  mode === t ? "bg-thyme-800 text-white" : "text-zinc-500 hover:text-zinc-800"
                 }`}
               >
                 {t === "nominal" ? "$" : "%"}
@@ -138,54 +208,63 @@ export default function CategoryComparisonChart({ rows }: { rows: ComparisonRow[
         </div>
       </div>
 
-      <div className="flex h-72 items-end gap-3 overflow-x-auto pb-1">
-        {sorted.map((row) => {
-          // Paint tallest first so shorter bars sit in front and cast onto them
-          const bars = SERIES.map((s) => ({ ...s, value: row[s.key] ?? 0 }))
-            .filter((b) => b.value > 0)
-            .sort((a, b) => b.value - a.value);
-          const fill = heightPct(bars[0]?.value ?? 0);
-          // Rotated labels need roughly 6px per character; when the tallest
-          // bar is too short to hold the name, sit it just above instead.
-          const fitsInside = (fill / 100) * CHART_HEIGHT_PX >= row.label.length * 6.2 + 14;
+      <div className="overflow-x-auto pb-1">
+        <div
+          className="relative h-72"
+          style={{ width: Math.max(sorted.length * (COLUMN_W + COLUMN_GAP) - COLUMN_GAP, 0) }}
+        >
+          {stable.map((row) => {
+            const bars = barsFor(row);
+            const fill = bars[0]?.pct ?? 0;
+            // Rotated labels need roughly 6px per character; when the tallest
+            // bar is too short to hold the name, sit it just above instead.
+            const fitsInside = (fill / 100) * CHART_HEIGHT_PX >= row.label.length * 6.2 + 14;
+            const index = positions.get(row.category) ?? 0;
 
-          return (
-            <div
-              key={row.category}
-              onMouseEnter={() => setHovered(row.category)}
-              onMouseLeave={() => setHovered((h) => (h === row.category ? null : h))}
-              className="relative h-full w-14 shrink-0 cursor-default"
-            >
-              {bars.map((bar, i) => (
-                <div
-                  key={bar.key}
-                  className="absolute bottom-0 w-full rounded-lg transition-[height]"
-                  style={{
-                    height: `${heightPct(bar.value)}%`,
-                    backgroundColor: bar.color,
-                    // Shorter bars sit in front — cast onto the taller bar behind
-                    boxShadow: i > 0 ? "0 -3px 9px rgba(10, 35, 40, 0.5)" : undefined,
-                  }}
-                />
-              ))}
-              {fitsInside ? (
-                <span
-                  className="absolute bottom-0 left-0 right-0 flex items-center justify-center rotate-180 whitespace-nowrap text-[11px] font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.5)] [writing-mode:vertical-rl]"
-                  style={{ height: `${fill}%` }}
-                >
-                  {row.label}
-                </span>
-              ) : (
-                <span
-                  className="absolute left-0 right-0 flex justify-center rotate-180 whitespace-nowrap text-[11px] font-bold text-zinc-500 [writing-mode:vertical-rl]"
-                  style={{ bottom: `calc(${fill}% + 6px)` }}
-                >
-                  {row.label}
-                </span>
-              )}
-            </div>
-          );
-        })}
+            return (
+              <div
+                key={row.category}
+                onMouseEnter={() => setHovered(row.category)}
+                onMouseLeave={() => setHovered((h) => (h === row.category ? null : h))}
+                className="absolute bottom-0 top-0 left-0 cursor-default"
+                style={{
+                  width: COLUMN_W,
+                  transform: `translateX(${index * (COLUMN_W + COLUMN_GAP)}px)`,
+                  transition: SLIDE,
+                }}
+              >
+                {bars.map((bar, i) => (
+                  <div
+                    key={bar.key}
+                    className="absolute bottom-0 w-full rounded-lg"
+                    style={{
+                      height: `${bar.pct}%`,
+                      backgroundColor: bar.color,
+                      transition: SLIDE,
+                      // Shorter bars sit in front — cast onto the taller bar behind
+                      boxShadow: i > 0 ? "0 -3px 9px rgba(10, 35, 40, 0.5)" : undefined,
+                    }}
+                  />
+                ))}
+                {fitsInside ? (
+                  <span
+                    className="absolute bottom-0 left-0 right-0 flex items-center justify-center rotate-180 whitespace-nowrap text-[11px] font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.5)] [writing-mode:vertical-rl]"
+                    style={{ height: `${fill}%`, transition: SLIDE }}
+                  >
+                    {row.label}
+                  </span>
+                ) : (
+                  <span
+                    className="absolute left-0 right-0 flex justify-center rotate-180 whitespace-nowrap text-[11px] font-bold text-zinc-500 [writing-mode:vertical-rl]"
+                    style={{ bottom: `calc(${fill}% + 6px)`, transition: SLIDE }}
+                  >
+                    {row.label}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {active ? (
@@ -203,7 +282,9 @@ export default function CategoryComparisonChart({ rows }: { rows: ComparisonRow[
         </div>
       ) : (
         <p className="mt-4 border-t border-zinc-100 pt-3 text-sm text-zinc-400">
-          Hover a category to see its {ticker === "nominal" ? "amounts" : "percent of budget"}.
+          Hover a category to see its {mode === "nominal" ? "amounts" : "percent of budget"}.
+          {hiddenCount > 0 &&
+            ` ${hiddenCount} ${hiddenCount === 1 ? "category has" : "categories have"} no budget and can't be shown as a percent.`}
         </p>
       )}
     </div>
