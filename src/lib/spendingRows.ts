@@ -39,6 +39,7 @@ export function buildSpendingRows(
         timeZone: "UTC",
       }),
       category: t.plaidCategoryPrimary ? prettyCategory(t.plaidCategoryPrimary) : "—",
+      categoryKey: t.plaidCategoryPrimary,
       cost: currency.format(amount),
       description: t.description,
       receipts: t._count.attachments,

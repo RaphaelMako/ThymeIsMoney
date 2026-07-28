@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CategoryRow } from "@/lib/insights";
+import { useCategoryModal } from "./CategoryModal";
 
 export type ComparisonRow = CategoryRow & { monthlyBudget?: number };
 
@@ -57,6 +58,7 @@ export default function CategoryComparisonChart({ rows }: { rows: ComparisonRow[
   const [sortKey, setSortKey] = useState<SortKey>("budgetUsage");
   const [ticker, setTicker] = useState<Ticker>("nominal");
   const [hovered, setHovered] = useState<string | null>(null);
+  const modal = useCategoryModal();
 
   const hasAnyBudget = rows.some((r) => (r.monthlyBudget ?? 0) > 0);
   const mode: Ticker = hasAnyBudget ? ticker : "nominal";
@@ -226,7 +228,9 @@ export default function CategoryComparisonChart({ rows }: { rows: ComparisonRow[
                 key={row.category}
                 onMouseEnter={() => setHovered(row.category)}
                 onMouseLeave={() => setHovered((h) => (h === row.category ? null : h))}
-                className="absolute bottom-0 top-0 left-0 cursor-default"
+                onClick={() => modal?.open(row.category, row.label)}
+                title={modal ? `View ${row.label} in detail` : undefined}
+                className={`absolute bottom-0 top-0 left-0 ${modal ? "cursor-pointer" : "cursor-default"}`}
                 style={{
                   width: COLUMN_W,
                   transform: `translateX(${index * (COLUMN_W + COLUMN_GAP)}px)`,

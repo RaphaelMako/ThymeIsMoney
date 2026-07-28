@@ -1,8 +1,12 @@
+"use client";
+
 import type { Bubble } from "@/lib/insights";
+import { useCategoryModal } from "./CategoryModal";
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export default function CategoryBubbles({ bubbles }: { bubbles: Bubble[] }) {
+  const modal = useCategoryModal();
   if (bubbles.length === 0) return null;
 
   return (
@@ -20,8 +24,9 @@ export default function CategoryBubbles({ bubbles }: { bubbles: Bubble[] }) {
         return (
           <figure key={b.category} className="flex flex-col items-center gap-2">
             <div
-              title={`${b.label}: ${pct}% ${over ? "over" : "under"} usual`}
-              className="flex items-center justify-center rounded-full"
+              onClick={() => modal?.open(b.category, b.label)}
+              title={`${b.label}: ${pct}% ${over ? "over" : "under"} usual${modal ? " — click for detail" : ""}`}
+              className={`flex items-center justify-center rounded-full ${modal ? "cursor-pointer" : ""}`}
               style={{
                 width: outer,
                 height: outer,

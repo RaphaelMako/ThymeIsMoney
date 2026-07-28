@@ -14,7 +14,9 @@ import SpendingInsightCard from "@/components/SpendingInsightCard";
 import SyncButton from "@/components/SyncButton";
 import Link from "next/link";
 import SpendingTable from "@/components/SpendingTable";
+import CategoryModalProvider from "@/components/CategoryModal";
 import { buildSpendingRows, monthLabel } from "@/lib/spendingRows";
+import { loadCategoryPayload } from "@/lib/categoryPayload";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -23,7 +25,7 @@ export default async function Home() {
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
 
-  const [bankAccounts, transactions, budgetProfile] = await Promise.all([
+  const [bankAccounts, transactions, budgetProfile, categoryPayload] = await Promise.all([
     db.bankAccount.findMany({
       where: { plaidItem: { userId } },
       orderBy: { name: "asc" },
@@ -37,6 +39,7 @@ export default async function Home() {
       where: { userId, isActive: true },
       include: { budgetCategories: { include: { category: true } } },
     }),
+    loadCategoryPayload(userId),
   ]);
 
   const netWorth = calculateNetWorth(bankAccounts);
@@ -127,6 +130,11 @@ export default async function Home() {
       : null;
 
   return (
+    <CategoryModalProvider
+      transactions={categoryPayload.transactions}
+      budgets={categoryPayload.budgets}
+      todayIso={todayIso}
+    >
     <div className="flex flex-1 flex-col bg-zinc-50">
       <div className="relative">
         <BalanceHero
@@ -308,5 +316,6 @@ export default async function Home() {
         </section>
       </main>
     </div>
+    </CategoryModalProvider>
   );
 }

@@ -3,7 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import SpendingTable from "@/components/SpendingTable";
+import CategoryModalProvider from "@/components/CategoryModal";
 import { buildSpendingRows, monthLabel } from "@/lib/spendingRows";
+import { loadCategoryPayload } from "@/lib/categoryPayload";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -19,15 +21,23 @@ export default async function MonthPage({ params }: { params: Promise<{ month: s
   const end = new Date(start);
   end.setUTCMonth(end.getUTCMonth() + 1);
 
-  const transactions = await db.transaction.findMany({
-    where: { userId, date: { gte: start, lt: end } },
-    orderBy: { date: "desc" },
-    include: { _count: { select: { attachments: true } } },
-  });
+  const [transactions, categoryPayload] = await Promise.all([
+    db.transaction.findMany({
+      where: { userId, date: { gte: start, lt: end } },
+      orderBy: { date: "desc" },
+      include: { _count: { select: { attachments: true } } },
+    }),
+    loadCategoryPayload(userId),
+  ]);
 
   const { rows, totalSpend } = buildSpendingRows(transactions, month);
 
   return (
+    <CategoryModalProvider
+      transactions={categoryPayload.transactions}
+      budgets={categoryPayload.budgets}
+      todayIso={new Date().toISOString().slice(0, 10)}
+    >
     <div className="flex flex-1 flex-col bg-zinc-50">
       <header className="bg-thyme-900 px-6 py-10 text-white">
         <div className="mx-auto w-[85%]">
@@ -47,5 +57,6 @@ export default async function MonthPage({ params }: { params: Promise<{ month: s
         </section>
       </main>
     </div>
+    </CategoryModalProvider>
   );
 }

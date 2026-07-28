@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useCategoryModal } from "./CategoryModal";
 
 export type SpendingRow = {
   id: string;
   name: string;
   date: string; // pre-formatted
   category: string;
+  /** Raw Plaid primary, used to open the category detail modal. */
+  categoryKey: string | null;
   cost: string; // pre-formatted
   description: string | null;
   receipts: number;
@@ -29,6 +32,7 @@ export default function SpendingTable({
   monthHref?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const modal = useCategoryModal();
   const visible = expanded || !collapsible ? rows : rows.slice(0, INITIAL_ROWS);
   const hiddenCount = collapsible ? rows.length - INITIAL_ROWS : 0;
 
@@ -59,7 +63,16 @@ export default function SpendingTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{row.date}</td>
                 <td className="whitespace-nowrap px-4 py-3 capitalize text-zinc-500">
-                  {row.category}
+                  {modal && row.categoryKey ? (
+                    <button
+                      onClick={() => modal.open(row.categoryKey!, row.category)}
+                      className="capitalize text-thyme-800 hover:underline"
+                    >
+                      {row.category}
+                    </button>
+                  ) : (
+                    row.category
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-900">
                   {row.cost}
