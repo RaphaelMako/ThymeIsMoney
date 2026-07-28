@@ -73,9 +73,10 @@ export default async function Home() {
       }
     }
   }
-  const comparisonRows = comparison
-    .slice(0, 14)
-    .map((r) => ({ ...r, monthlyBudget: budgetByPrimary.get(r.category) }));
+  const comparisonRows = comparison.map((r) => ({
+    ...r,
+    monthlyBudget: budgetByPrimary.get(r.category),
+  }));
 
   let budgetGroups: BudgetGroupSummary[] | null = null;
   if (budgetProfile?.monthlyIncome) {
@@ -256,7 +257,7 @@ export default async function Home() {
             <h2 className="mb-3 text-2xl font-bold text-thyme-900">
               This Month&apos;s Spending
             </h2>
-            <SpendingTable rows={monthRows} />
+            <SpendingTable rows={monthRows} monthHref={`/month/${thisMonthKey}`} />
           </section>
         )}
 

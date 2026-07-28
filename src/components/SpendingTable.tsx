@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export type SpendingRow = {
   id: string;
@@ -16,10 +17,20 @@ export type SpendingRow = {
 
 const INITIAL_ROWS = 5;
 
-export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
+export default function SpendingTable({
+  rows,
+  collapsible = true,
+  monthHref,
+}: {
+  rows: SpendingRow[];
+  /** When false, every transaction is shown with no expand/collapse toggle. */
+  collapsible?: boolean;
+  /** When set, a link to that month's summary page sits in the footer. */
+  monthHref?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? rows : rows.slice(0, INITIAL_ROWS);
-  const hiddenCount = rows.length - INITIAL_ROWS;
+  const visible = expanded || !collapsible ? rows : rows.slice(0, INITIAL_ROWS);
+  const hiddenCount = collapsible ? rows.length - INITIAL_ROWS : 0;
 
   if (rows.length === 0) {
     return <p className="text-sm text-zinc-500">No transactions this month.</p>;
@@ -67,13 +78,25 @@ export default function SpendingTable({ rows }: { rows: SpendingRow[] }) {
           </tbody>
         </table>
       </div>
-      {hiddenCount > 0 && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full py-3 text-base font-bold text-thyme-800 hover:text-thyme-600"
-        >
-          {expanded ? "Show less" : `Show ${hiddenCount} more`}
-        </button>
+      {(hiddenCount > 0 || monthHref) && (
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 py-3">
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-base font-bold text-thyme-800 hover:text-thyme-600"
+            >
+              {expanded ? "Show less" : `Show ${hiddenCount} more`}
+            </button>
+          )}
+          {monthHref && (
+            <Link
+              href={monthHref}
+              className="text-base font-bold text-thyme-800 hover:text-thyme-600"
+            >
+              Open Month Summary →
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );

@@ -43,7 +43,7 @@ export default async function MonthPage({ params }: { params: Promise<{ month: s
       <main className="mx-auto flex w-[85%] flex-1 flex-col gap-8 py-8">
         <section>
           <h2 className="mb-3 text-2xl font-bold text-thyme-900">Spending</h2>
-          <SpendingTable rows={rows} />
+          <SpendingTable rows={rows} collapsible={false} />
         </section>
       </main>
     </div>
